@@ -1,0 +1,46 @@
+---
+title: "Stouts"
+author: "Daniel Brannock"
+date: "12/5/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+```{r data entry, include=FALSE}
+# Record the data. Each person tasted 22 samples.
+raw <- data.frame(
+  pos = 1:22,
+  beerid = c("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
+             "f", "h", "j", "a", "c", "b", "d", "g", "k", "i", "e"),
+  vic = c(7,3,5,6,2,4,5,3,6,1,5,6,2,1,4,5,4,7,4,7,8,5),
+  pag = c(7,6,3,8,3,5,5,6,6.5,4.5,4,8,5,2,8.2,4.3,2.5,7.3,4,6.5,6.5,2),
+  jon = c(4,5,5,8,3,5,4,6,4,2,3,7,4,3,5,3,5,6,4,4,6,3),
+  kei = c(8,5,4,5,4,6,4,4,8,8,5,6,5,7,5,4,6,5,4,5,6,4),
+  dan = c(4,5,8,4,3,5,6,4,4,6,8,8,5,7,6,7,9,6,5,7,4,6),
+  jul = c(8,5,6,6,3,7,5,6,8,4,5,8,5,3,7,3,5,6,5,7,6,4),
+  kor = c(6,6.5,7.5,4.5,2.5,4.5,5,5,6.5,2.5,7.5,4.5,6,3,5,7,5.5,6.5,6,6.5,6,5),
+  cap = c(5,7,9,6,6,6,7,6,8,3,8,5,6,7,6,6,8,5,6,5,3,6),
+  jen = c(5,6,8,5,4,6,5,7,8,6,6,5,3,4,5,6,9,5,4,6,6,3),
+  chr = c(2,9,4,5,1,8,4,5,6,8,3,5,1,8,6,4,9,6,1,7,6,2)
+)
+
+# Enter in the beer information
+beers <- data.frame(
+  beerid = c("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"),
+  name = c("Lost Coast 8-ball", "Southern Tier Chocolate", "Duclaw 865 Coffee",
+           "Guiness Extra", "North Coast Old Rasputin Imperial",
+           "Duck Rabbit Milk", "Great Divide Yeti Imperial", 
+           "Olde Hickory Hickory Stick", "Left Hand Milk",
+           "New Holland Dragon's Milk Bourbon Barrel Aged", 
+           "Left Hand Bittersweet Imperial Coffee"),
+  raw_price = c(1.99,8.99,1.99,1.25,3.49,1.5,9.99,2.79,2.49,7.99,4.49),
+  size = c(12, 22, 12, 11.2, 12, 12, 22, 12, 12, 22, 12),
+  abv = c(5.8,11,6.9,5.6,9,5.7,9.5,5,6,11,8.9)
+) %>% 
+  mutate(price = raw_price/size)
+```
+
