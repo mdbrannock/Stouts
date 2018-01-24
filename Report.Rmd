@@ -2,11 +2,14 @@
 title: "Stouts"
 author: "Daniel Brannock"
 date: "12/5/2017"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
 library(tidyverse)
 ```
 
@@ -42,5 +45,60 @@ beers <- data.frame(
   abv = c(5.8,11,6.9,5.6,9,5.7,9.5,5,6,11,8.9)
 ) %>% 
   mutate(price = raw_price/size)
+
+# Convert the raw data into a more tidyverse-friendly version (long not wide)
+raw_long <- raw %>% 
+  gather(key = taster, value = score, -pos, -beerid)
 ```
 
+# This Time With Stouts
+
+## Intro
+Here we are again. For those that joined in this experiment for the first time, thank you so much for participating! Your time and opinion is much appreciated. For those who joined in this experiment for the last time, good riddance. Your opinion is worthless and I hate you. Just kidding, but I _do_ want to know why you don't want to be my friend anymore.
+
+In case some of you have forgotten or were only pretending to understand I'll start with a quick recap. All 10 of us sampled 11 different beers. The beers were double blind enough, with all labels covered and the pourers chosen for their apathy towards beer in general. We rated each beer 2 separate times in an attempt to prevent taste fatigue from helping or punishing beer served later in the evening. We'll be taking a look at how each beer fared and how consistent each taster was.
+
+## Meet the Tasters
+Unlike the first two times we did this pretty much everyone had a nice distribution of scores. Keith took over Jonathan's role as "one who likes beer", but even then it's not as extreme. Christopher's spread in particular is pretty impressive, ranging from what he would call "I can taste a semblence of hops" (score=1) to "freeze this and it would be a milkshake" (score=9). I'll standardize these to be from 1 to 10 regardless, but it's nice to at least look at the raw spread before I do so.
+
+```{r, echo = F}
+ggplot(raw_long) +
+  geom_violin(aes(x = taster, y = score, fill = taster), bw = 0.5) +
+  scale_y_continuous(breaks = 1:10, minor_breaks = 1:10) +
+  labs(x = "Tasters", y = "Scores",
+       title = "Tasters' Score Distributions") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+## Meet the Beers
+I was going to do a little write-up on the different types of beer, the range of cost and ABV, and other such details. I've decided not to because I doubt anyone cares very much beyond the context of how well they did in the tasting, and that isn't something I planned on discussing yet. Why, you ask, did I then keep this section in the report? It's entirely because I liked the symmetry of the names of this and the preceding section. If that's not enough for you then I invite you to write your own report.
+
+## Who Won?
+Obviously there are no winners and losers here, except that some people did much better than others. If you simply sort by the average difference between scores for the same beer then here's your list:
+```{r}
+raw_long %>%
+  group_by(taster, beerid) %>% 
+  summarize(d = max(score)-min(score)) %>% 
+  group_by(taster) %>% 
+  summarize(mean = mean(d), min = min(d), max = max(d)) %>%
+  arrange(mean) %>% 
+kable(digits = 1, caption = "Difference in Scores for the same Beer")
+```
+
+Keith wins! Christopher and Capen lose! Huzzah! But wait! This doesn't seem quite fair. Yes, Keith was most consistent within each beer, but he was also most consistent across _different_ beers. Why should he be rewarded for giving every beer a score between 4 and 8, while Christopher is punished for having scores between 1 and 9? Let's standardize and try again.
+```{r}
+std_long <- raw_long %>% 
+  group_by(taster) %>% 
+  mutate(score_std = (score-min(score))/(max(score)-min(score))*9 + 1)
+
+std_long %>%
+  group_by(taster, beerid) %>% 
+  summarize(d = max(score_std)-min(score_std)) %>% 
+  group_by(taster) %>% 
+  summarize(mean = mean(d), min = min(d), max = max(d)) %>%
+  arrange(mean) %>% 
+kable(digits = 1, caption = "Difference in Scores for the same Beer")
+```
+
+What a twist!! After standardizing, *Keith* wins, and *Capen* loses! As anti-climactic as that was for you to read, just imagine what it was like having to actually run the analysis to get those results. At least Christopher's name was cleared. However, as fun as it is to crown winners and mock losers, we were all pretty similar. What I really wanted to know is whether or not, as a group, we could meaningfully differentiate between different beers.
