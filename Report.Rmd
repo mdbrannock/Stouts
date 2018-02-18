@@ -57,7 +57,7 @@ raw_long <- raw %>%
 # Intro
 Here we are again. For those that joined in this experiment for the first time, thank you so much for participating! Your time and opinion are much appreciated. For those who joined in this experiment for the last time, good riddance. Your opinion is worthless and I hate you. Just kidding, but I _do_ want to know why you don't want to be my friend anymore.
 
-In case some of you have forgotten or were only pretending to understand I'll start with a quick recap. All 10 of us sampled 11 different beers. The beers were double blind enough, with all labels covered and the pourers chosen for their apathy towards beer in general. We rated each beer 2 separate times in an attempt to prevent taste fatigue from helping or punishing beer served later in the evening. We'll be taking a look at how each beer fared and how consistent each taster was.
+In case some of you have forgotten or were only pretending to understand I'll start with a quick recap of what we did. All 10 of us sampled 11 different beers. The beers were double blind enough, with all labels covered and the pourers chosen for their apathy towards beer in general. We rated each beer 2 separate times in an attempt to prevent taste fatigue from helping or punishing beer served later in the evening. We'll be taking a look at how each beer fared and how consistent each taster was.
 
 # Meet the Tasters
 Unlike the first two times we did this pretty much everyone had a nice distribution of scores. Keith took over Jonathan's role as "one who likes beer", but even then it's not as extreme. Christopher's spread in particular is pretty impressive, ranging from what he would call "I can taste a semblence of hops" (score=1) to "freeze this and it would be a milkshake" (score=9). I'll standardize these to be from 1 to 10 regardless, but it's nice to at least look at the raw spread before I do so.
@@ -88,7 +88,8 @@ Keith wins! Christopher and Capen lose! Huzzah! *But wait!* This doesn't seem qu
 ```{r}
 std_long <- raw_long %>% 
   group_by(taster) %>% 
-  mutate(score_std = (score-min(score))/(max(score)-min(score))*9 + 1)
+  mutate(score_std = (score-min(score))/(max(score)-min(score))*9 + 1) %>% 
+  ungroup()
 
 std_long %>%
   group_by(taster, beerid) %>% 
@@ -99,7 +100,93 @@ std_long %>%
 kable(digits = 1, caption = "Difference in Scores for the same Beer")
 ```
 
-What a twist!! After standardizing, **Keith** wins, and **Capen** loses! As anti-climactic as that was for you to read, just imagine what it was like having to actually run the analysis to get those results. At least Christopher's name was cleared so it wasn't a total waste of time. As fun as it is to crown winners and mock losers, we were all actually pretty similar. What I really wanted to know is whether or not, as a group, we could meaningfully differentiate between beers.
+What a twist!! After standardizing, **Keith** wins, and **Capen** loses! But this still doesn't sit right with me (and not because I'm second from last). Even with standardized scores, there is still a possibility that our particular score distributions lend themselves to a high or low average differences in beer ratings. If you don't know what I mean, then I beg you to just trust me. Fortunately we can account for this, but you'll have to bear with me for a second to explain it.
+
+The basic idea is to figure out how often each of us would do a better job consistently rating beers than if we drew from our scores at random. For instance, consider Jonathan's standardized scores across all the beers:
+```{r}
+std_long %>% 
+  filter(taster == "jon") %>% 
+  left_join(select(beers, beerid, name), by = "beerid") %>% 
+  select(name, score = score_std) %>% 
+  group_by(name) %>% mutate(pos = row_number()) %>% 
+  spread(pos, score) %>% select(Beer = name, First = `1`, Second = `2`) %>% 
+  mutate(Difference = abs(First - Second)) %>%
+kable(digits = 1, caption = "Jonathan's Scores for All Beers")
+```
+
+If you take the average of all those differences then you get 1.8. Now we're going to do something weird. We'll randomly shuffle all of Jonathan's scores around. Before he gave Guiness Extra a perfect 10 then a 7. We'll randomly reassign that 10 and 7 to (probably) different beer. For example, this is one possible iteration:
+```{r}
+set.seed(9001)
+std_long %>% 
+  filter(taster == "jon") %>% 
+  left_join(select(beers, beerid, name), by = "beerid") %>% 
+  select(name, score = score_std) %>%
+  mutate(score = sample(score)) %>% 
+  group_by(name) %>% mutate(pos = row_number()) %>% 
+  spread(pos, score) %>% select(Beer = name, First = `1`, Second = `2`) %>% 
+  mutate(Difference = abs(First - Second)) %>% {mean(.$Difference)}
+kable(digits = 1, caption = "Jonathan's Scores for All Beers")
+```
+
+All the scores have been randomly reassigned (you can see the 10 is now assigned to Duclas 865 Coffee). If we take the average of these differences we get 2.6, which is higher than Jonathan's original average of 1.8. But it's 2018, people. We live in a world of big data. Talkin' about the internet of things, machine learning, ARTIFICIAL INTELLIGENCE. I hope I'm making myself clear. We're not going to shuffle these scores once. We're going to do it 100,000 times. Then we'll see how Jonathan's 1.8 holds up compared to all those random iterations.
+```{r, include=F}
+set.seed(1)
+std_long %>% group_by(taster) %>% mutate(rscore = sample(score_std)) %>% 
+  filter(beerid == "a") %>% select(pos, taster, rscore) %>%
+  spread(pos, rscore) %>% mutate(`First Score` = `1`, `Second Score` = `15`,
+                                 Difference = abs(`1` - `15`)) %>%
+  {mean(.$Difference)}
+
+# target shuffling for each beer across all tasters
+#ts_beers <- map_df(1:10000, ~{
+#  std_long %>% group_by(taster) %>% mutate(rscore = sample(score_std)) %>% 
+#    group_by(taster, beerid) %>% 
+#    summarize(diff = abs(first(rscore)-last(rscore))) %>%
+#    group_by(beerid) %>% summarize(m = mean(diff))
+#})
+# Save ts so we don't need to run this every time
+#save(ts_beers, file = "ts_beers.Rda")
+load("/Users/mdbrannock/Documents/Projects/Stouts/ts_beers.Rda")
+
+# Target shuffling for each taster across all beers
+#set.seed(9001)
+#ts_tasters <- map_df(1:10000, ~{
+#  std_long %>% group_by(taster) %>% mutate(rscore = sample(score_std)) %>% 
+#    group_by(taster, beerid) %>% 
+#    summarize(diff = abs(first(rscore)-last(rscore))) %>%
+#    group_by(taster) %>% summarize(m = mean(diff))
+#})
+# Save ts so we don't need to run this every time
+save(ts_tasters, file = "ts_tasters.Rda")
+load("/Users/mdbrannock/Documents/Projects/Stouts/ts_tasters.Rda")
+
+ts %>% group_by(beerid) %>% summarize(`Mean Random Score` = mean(m))
+
+# Save how often each beer beats randomness
+cons_scores <- std_long %>% group_by(taster, beerid) %>% 
+  summarize(diff = abs(first(score_std) - last(score_std))) %>% 
+  group_by(beerid) %>% summarize(actual = mean(diff))
+
+pvalues_beers <- map_df(letters[1:11], ~{
+  temp_ts <- ts_beers %>% filter(beerid == .x) %>% {.$m}
+  temp_cs <- cons_scores %>% filter(beerid == .x) %>% {.$actual}
+  tibble(beerid = .x, `P-value` = 1-sum(temp_cs<temp_ts)/length(temp_ts))
+})
+
+# Save how often each taster beets randomness
+cons_scores <- std_long %>% group_by(taster, beerid) %>% 
+  summarize(diff = abs(first(score_std) - last(score_std))) %>% 
+  group_by(taster) %>% summarize(actual = mean(diff))
+
+pvalues_tasters <- map_df(cons_scores$taster, ~{
+  temp_ts <- ts_tasters %>% filter(taster == .x) %>% {.$m}
+  temp_cs <- cons_scores %>% filter(taster == .x) %>% {.$actual}
+  tibble(taster = .x, `P-value` = 1-sum(temp_cs<temp_ts)/length(temp_ts))
+})
+```
+
+
+As anti-climactic as that was for you to read, just imagine what it was like having to actually run the analysis to get those results. At least Christopher's name was cleared so it wasn't a total waste of time. As fun as it is to crown winners and mock losers, we were all actually pretty similar. What I really wanted to know is whether or not, as a group, we could meaningfully differentiate between beers.
 
 # Perceptive Pallettes
 We'll test how well we differentiate beers in what I hope is an intuitive way. Each beer got 2 scores from each of the 10 tasters resulting in 10 pairs of scores per beer. From there we simply take the difference within each pair. The table below demonstrates this for one beer (note scores have been standardized):
@@ -121,15 +208,27 @@ std_long %>% group_by(taster) %>% mutate(rscore = sample(score_std)) %>%
                                  Difference = abs(`1` - `15`)) %>%
   {mean(.$Difference)}
 
-#ts <- map_df(1:10000, ~{
+# target shuffling for each beer across all tasters
+#ts_beers <- map_df(1:10000, ~{
 #  std_long %>% group_by(taster) %>% mutate(rscore = sample(score_std)) %>% 
 #    group_by(taster, beerid) %>% 
 #    summarize(diff = abs(first(rscore)-last(rscore))) %>%
 #    group_by(beerid) %>% summarize(m = mean(diff))
 #})
 # Save ts so we don't need to run this every time
-#save(ts, file = "ts.Rda")
-load("/Users/mdbrannock/Documents/Projects/Stouts/ts.Rda")
+#save(ts_beers, file = "ts_beers.Rda")
+load("/Users/mdbrannock/Documents/Projects/Stouts/ts_beers.Rda")
+
+# Target shuffling for each taster across all beers
+#ts_tasters <- map_df(1:10000, ~{
+#  std_long %>% group_by(taster) %>% mutate(rscore = sample(score_std)) %>% 
+#    group_by(taster, beerid) %>% 
+#    summarize(diff = abs(first(rscore)-last(rscore))) %>%
+#    group_by(taster) %>% summarize(m = mean(diff))
+#})
+# Save ts so we don't need to run this every time
+#save(ts_tasters, file = "ts_tasters.Rda")
+load("/Users/mdbrannock/Documents/Projects/Stouts/ts_tasters.Rda")
 
 ts %>% group_by(beerid) %>% summarize(`Mean Random Score` = mean(m))
 
@@ -138,10 +237,21 @@ cons_scores <- std_long %>% group_by(taster, beerid) %>%
   summarize(diff = abs(first(score_std) - last(score_std))) %>% 
   group_by(beerid) %>% summarize(actual = mean(diff))
 
-pvalues <- map_df(letters[1:11], ~{
-  temp_ts <- ts %>% filter(beerid == .x) %>% {.$m}
+pvalues_beers <- map_df(letters[1:11], ~{
+  temp_ts <- ts_beers %>% filter(beerid == .x) %>% {.$m}
   temp_cs <- cons_scores %>% filter(beerid == .x) %>% {.$actual}
   tibble(beerid = .x, `P-value` = 1-sum(temp_cs<temp_ts)/length(temp_ts))
+})
+
+# Save how often each taster beets randomness
+cons_scores <- std_long %>% group_by(taster, beerid) %>% 
+  summarize(diff = abs(first(score_std) - last(score_std))) %>% 
+  group_by(taster) %>% summarize(actual = mean(diff))
+
+pvalues_tasters <- map_df(cons_scores$taster, ~{
+  temp_ts <- ts_tasters %>% filter(taster == .x) %>% {.$m}
+  temp_cs <- cons_scores %>% filter(taster == .x) %>% {.$actual}
+  tibble(taster = .x, `P-value` = 1-sum(temp_cs<temp_ts)/length(temp_ts))
 })
 ```
 
@@ -158,9 +268,43 @@ kable(digits = 2, caption = "Consistencies and Average Scores for Each Beer")
 For those who don't remember their statistics, a p-value is the probably that an event happened assuming some "null hypothesis" is true. In this case, our p-value is the probability that random scores were more consistent for a beer than our true scores. A lower p-value means that we were very consistent in our judgement of that beer, while a high p-value means the opposite. As can be seen above, there are really just a handful of beers that we were truly consistent in judging. What's even more depressing is that, with the exception of Guiness, those also happen to be the beers we _didn't like_. You can also see in Table 4 which beers did best and worst overall. I didn't do any score adjustments due to price, so their price per 12 fluid ounces is also included. It didn't seem like any adjustments were necessary given that the cheaper beers pretty much already win.
 
 # But What Did *I* Like?
-We've established that as a group we're not very good at this, but that shouldn't stop us from figuring out which beers each of us liked best. 
+We've established that as a group we're not very good at this, but that shouldn't stop us from figuring out which beers each of us liked best. The table below shows the top 3 beers for each taster.
 
 ```{r}
+# average score and rank for each beer for each person
+avgd <- std_long %>% 
+  group_by(taster, beerid) %>% 
+  summarize(score = mean(score_std)) %>%
+  group_by(taster) %>% 
+  mutate(r = rank(-score, ties.method = "first")) %>% ungroup()
 
+# Spread this out for the top 3 for each taster 
+avgd %>% filter(r <= 3) %>% 
+  left_join(beers, by = "beerid") %>% 
+  select(taster, name, r) %>% 
+  spread(r, name) %>% 
+  rename(Taster = taster, Favorite = `1`, Second = `2`, Third = `3`) %>% 
+kable(caption = "Everyone Favorite Beers")
+```
+
+The last analysis I'll bore you with is whom your preference in stouts is most closely aligned. Using just the most basic of clustering algorithms, there are 3 pretty clear groups of tasters. 
+
+```{r}
+# Convert to a matrix that can actually be used for clustering/PCA
+std_wide <- avgd %>% 
+  select(taster, beerid, score) %>% 
+  spread(taster, score)
+
+# This actually doens't end up being that great
+pca <- prcomp(std_wide[, 2:ncol(std_wide)])$rotations %>% as.data.frame()
+
+# Try clustering (which needs a different wide format)
+std_wide2 <- avgd %>% 
+  select(taster, beerid, score) %>% 
+  spread(beerid, score) %T>% {rownames(.) <- .$taster} %>% 
+  select(-taster)
+d <- dist(std_wide2)
+clus <- hclust(d, method = "complete")
+plot(clus)
 ```
 
